@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
 
     # API Security
-    api_key: str = ""
+    api_key: str = "sentinelforge-secret-key"
 
 
     # RAG / ChromaDB

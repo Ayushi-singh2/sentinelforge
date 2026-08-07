@@ -1,20 +1,28 @@
-from __future__ import annotations
-
 from fastapi import FastAPI
 
 from app.api.routes import router
+from app.api.auth import auth_middleware
 from app.api.middleware import RequestMiddleware
 
 
 app = FastAPI(
     title="SentinelForge",
-    description="Secure RAG API system",
     version="1.0.0",
 )
 
 
-app.add_middleware(
-    RequestMiddleware
+# Request logging middleware
+app.add_middleware(RequestMiddleware)
+
+
+# API Key Authentication
+app.middleware("http")(auth_middleware)
+
+
+# API routes
+app.include_router(
+    router,
+    prefix="/api",
 )
 
 
@@ -33,9 +41,3 @@ def health():
         "status": "healthy",
         "service": "sentinelforge",
     }
-
-
-app.include_router(
-    router,
-    prefix="/api",
-)

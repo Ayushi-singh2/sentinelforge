@@ -4,56 +4,51 @@ import time
 import uuid
 import logging
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
+from fastapi import Request
 
 
 logger = logging.getLogger("sentinelforge.api")
 
 
-class RequestMiddleware(BaseHTTPMiddleware):
+async def request_middleware(
+    request: Request,
+    call_next,
+):
     """
-    API request logging middleware.
+    Request logging middleware.
 
-    Adds:
-    - Request ID
-    - Processing time
-    - Request lifecycle logs
+    Adds request id, logs start/end,
+    and measures request processing time.
     """
 
-    async def dispatch(
-        self,
-        request: Request,
-        call_next,
-    ) -> Response:
+    request_id = str(uuid.uuid4())
 
-        request_id = str(uuid.uuid4())
+    start_time = time.time()
 
-        start_time = time.time()
 
-        logger.info(
-            f"Request started | "
-            f"id={request_id} | "
-            f"method={request.method} | "
-            f"path={request.url.path}"
-        )
+    logger.info(
+        "Request started | id=%s | method=%s | path=%s",
+        request_id,
+        request.method,
+        request.url.path,
+    )
 
-        response = await call_next(request)
 
-        process_time = round(
-            time.time() - start_time,
-            4,
-        )
+    response = await call_next(request)
 
-        response.headers["X-Request-ID"] = request_id
-        response.headers["X-Process-Time"] = str(process_time)
 
-        logger.info(
-            f"Request completed | "
-            f"id={request_id} | "
-            f"status={response.status_code} | "
-            f"time={process_time}s"
-        )
+    elapsed = time.time() - start_time
 
-        return response
+
+    logger.info(
+        "Request completed | id=%s | status=%s | time=%.4fs",
+        request_id,
+        response.status_code,
+        elapsed,
+    )
+
+
+    response.headers["X-Request-ID"] = request_id
+
+
+    return response
