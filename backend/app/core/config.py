@@ -8,23 +8,35 @@ class Settings(BaseSettings):
     Application configuration.
     """
 
+    # Application
     app_name: str = "SentinelForge"
 
     debug: bool = False
 
-    # API security
+
+    # API Security
     api_key: str = ""
 
-    # RAG settings
+
+    # RAG / ChromaDB
     chroma_db_path: str = "./chroma_db"
 
     collection_name: str = "sentinelforge"
 
+    # compatibility with index.py
+    chroma_collection_name: str = "sentinelforge"
+
+
+    # Embedding
     embedding_model: str = "all-MiniLM-L6-v2"
 
 
+    # Retrieval limits
+    max_top_k: int = 20
+
+
     class Config:
-        env_file = "../.env"
+        env_file = ".env"
         extra = "ignore"
 
 

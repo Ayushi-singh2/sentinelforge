@@ -1,77 +1,66 @@
 from __future__ import annotations
 
-from typing import Any, Dict
-
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 
+from app.api.schemas import QueryRequest, QueryResponse
 from app.rag.pipeline import RAGPipeline
 
 
-router = APIRouter(
-    prefix="/api",
-    tags=["RAG"],
-)
+router = APIRouter()
 
 pipeline = RAGPipeline()
 
 
-class QueryRequest(BaseModel):
-    """
-    Request body for the RAG query endpoint.
-    """
-
-    query: str = Field(
-        ...,
-        min_length=1,
-        description="User question",
-    )
-
-    top_k: int = Field(
-        default=5,
-        ge=1,
-        le=20,
-        description="Number of documents to retrieve",
-    )
+@router.get("/health")
+def health():
+    return {
+        "status": "healthy",
+        "service": "sentinelforge",
+    }
 
 
-class QueryResponse(BaseModel):
-    """
-    Response returned by the RAG API.
-    """
-
-    success: bool
-    query: str
-    answer: str
-    grounded: bool
-    reason: str | None = None
-    citations: list[Dict[str, Any]] = []
-    formatted_citations: list[str] = []
+@router.get("/")
+def root():
+    return {
+        "name": "SentinelForge",
+        "status": "running",
+        "service": "RAG API",
+    }
 
 
 @router.post(
     "/query",
     response_model=QueryResponse,
 )
-def query_rag(request: QueryRequest) -> QueryResponse:
-    """
-    Execute the SentinelForge RAG pipeline.
-    """
+def query(
+    request: QueryRequest,
+):
+
+    # Empty string should return HTTP 422
+    if request.query == "":
+        raise HTTPException(
+            status_code=422,
+            detail=[
+                {
+                    "type": "value_error",
+                    "loc": ["body", "query"],
+                    "msg": "Query cannot be empty",
+                    "input": request.query,
+                }
+            ],
+        )
+
+    # Whitespace query is handled by RAG pipeline
+    # It should return HTTP 200 with failure response
+    if not request.query.strip():
+        return pipeline.query(
+            query=request.query,
+            top_k=request.top_k,
+        )
 
     result = pipeline.query(
         query=request.query,
         top_k=request.top_k,
     )
 
-    return QueryResponse(
-        success=result["success"],
-        query=result["query"],
-        answer=result.get("answer", ""),
-        grounded=result.get("grounded", False),
-        reason=result.get("reason"),
-        citations=result.get("citations", []),
-        formatted_citations=result.get(
-            "formatted_citations",
-            [],
-        ),
-    )
+    return result

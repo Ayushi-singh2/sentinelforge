@@ -4,61 +4,56 @@ import time
 import uuid
 import logging
 
-from fastapi import Request
-
-from app.core.logging import get_logger
-
-
-logger = get_logger(
-    "sentinelforge.api"
-)
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 
-async def request_middleware(
-    request: Request,
-    call_next,
-):
+logger = logging.getLogger("sentinelforge.api")
+
+
+class RequestMiddleware(BaseHTTPMiddleware):
     """
-    Global API middleware.
+    API request logging middleware.
 
-    Features:
-    - Request ID generation
-    - Request timing
-    - Basic request logging
+    Adds:
+    - Request ID
+    - Processing time
+    - Request lifecycle logs
     """
 
-    request_id = str(uuid.uuid4())
+    async def dispatch(
+        self,
+        request: Request,
+        call_next,
+    ) -> Response:
 
-    start_time = time.time()
+        request_id = str(uuid.uuid4())
 
-    request.state.request_id = request_id
+        start_time = time.time()
 
-    logger.info(
-        "Request started | id=%s | method=%s | path=%s",
-        request_id,
-        request.method,
-        request.url.path,
-    )
+        logger.info(
+            f"Request started | "
+            f"id={request_id} | "
+            f"method={request.method} | "
+            f"path={request.url.path}"
+        )
 
-    response = await call_next(request)
+        response = await call_next(request)
 
-    duration = (
-        time.time() - start_time
-    )
+        process_time = round(
+            time.time() - start_time,
+            4,
+        )
 
-    response.headers[
-        "X-Request-ID"
-    ] = request_id
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Process-Time"] = str(process_time)
 
-    response.headers[
-        "X-Process-Time"
-    ] = str(round(duration, 4))
+        logger.info(
+            f"Request completed | "
+            f"id={request_id} | "
+            f"status={response.status_code} | "
+            f"time={process_time}s"
+        )
 
-    logger.info(
-        "Request completed | id=%s | status=%s | time=%ss",
-        request_id,
-        response.status_code,
-        round(duration, 4),
-    )
-
-    return response
+        return response
