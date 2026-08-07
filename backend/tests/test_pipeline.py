@@ -1,19 +1,8 @@
-import sys
-from pathlib import Path
-
-sys.path.append(
-    str(Path(__file__).resolve().parents[1])
-)
-
 from app.rag.pipeline import RAGPipeline
 
 
 pipeline = RAGPipeline()
 
-
-# --------------------------------------------------
-# 1. Normal query
-# --------------------------------------------------
 
 print("-" * 50)
 print("TEST: Normal query")
@@ -25,26 +14,19 @@ result = pipeline.query(
 
 print("SUCCESS:", result["success"])
 print("QUERY:", result["query"])
+print("ANSWER:", result["answer"])
+print("GROUNDED:", result["grounded"])
 print("REASON:", result["reason"])
 
-if result["results"]:
-    print("RESULTS:", len(result["results"]))
+print("\nCITATIONS:")
 
-    first = result["results"][0]
+for citation in result["formatted_citations"]:
+    print(citation)
 
-    print("CONTENT:")
-    print(first["content"])
+assert result["success"] is True
+assert result["answer"]
+assert result["citations"]
 
-    print("SCORE:")
-    print(first["score"])
-
-    print("CITATION:")
-    print(first["citation"])
-
-
-# --------------------------------------------------
-# 2. Empty query
-# --------------------------------------------------
 
 print("-" * 50)
 print("TEST: Empty query")
@@ -52,13 +34,12 @@ print("TEST: Empty query")
 result = pipeline.query("")
 
 print("SUCCESS:", result["success"])
-print("QUERY:", result["query"])
+print("ANSWER:", result["answer"])
 print("REASON:", result["reason"])
 
+assert result["success"] is False
+assert result["grounded"] is False
 
-# --------------------------------------------------
-# 3. Prompt injection
-# --------------------------------------------------
 
 print("-" * 50)
 print("TEST: Prompt injection")
@@ -68,9 +49,11 @@ result = pipeline.query(
 )
 
 print("SUCCESS:", result["success"])
-print("QUERY:", result["query"])
 print("REASON:", result["reason"])
+
+assert result["success"] is False
+assert result["grounded"] is False
 
 
 print("-" * 50)
-print("Pipeline tests completed.")
+print("ALL PIPELINE TESTS PASSED")
