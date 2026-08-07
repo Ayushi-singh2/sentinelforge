@@ -1,12 +1,7 @@
-from __future__ import annotations
-
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """
-    Application configuration.
-    """
 
     # Application
     app_name: str = "SentinelForge"
@@ -23,7 +18,6 @@ class Settings(BaseSettings):
 
     collection_name: str = "sentinelforge"
 
-    # compatibility with index.py
     chroma_collection_name: str = "sentinelforge"
 
 
@@ -31,7 +25,7 @@ class Settings(BaseSettings):
     embedding_model: str = "all-MiniLM-L6-v2"
 
 
-    # Retrieval limits
+    # Retrieval
     max_top_k: int = 20
 
 

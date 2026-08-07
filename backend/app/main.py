@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 
-from app.api.routes import router
-from app.api.auth import auth_middleware
+from app.api.routes import router as api_router
 from app.api.middleware import RequestMiddleware
 
 
@@ -11,18 +10,15 @@ app = FastAPI(
 )
 
 
-# Request logging middleware
-app.add_middleware(RequestMiddleware)
+# Middleware
+app.add_middleware(
+    RequestMiddleware
+)
 
 
-# API Key Authentication
-app.middleware("http")(auth_middleware)
-
-
-# API routes
+# Register API routes
 app.include_router(
-    router,
-    prefix="/api",
+    api_router
 )
 
 
@@ -32,12 +28,4 @@ def root():
         "name": "SentinelForge",
         "status": "running",
         "service": "RAG API",
-    }
-
-
-@app.get("/health")
-def health():
-    return {
-        "status": "healthy",
-        "service": "sentinelforge",
     }

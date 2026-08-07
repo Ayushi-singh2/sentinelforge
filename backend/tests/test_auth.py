@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from fastapi import HTTPException
 
 from app.api.auth import validate_api_key
 
@@ -12,9 +13,11 @@ def secure(
     request: Request,
 ):
 
-    validate_api_key(
-        request
-    )
+    if not validate_api_key(request):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key"
+        )
 
     return {
         "status": "ok"
