@@ -33,6 +33,7 @@ def root():
     "/api/query",
     response_model=QueryResponse,
 )
+
 def query(
     request: QueryRequest,
 ):
