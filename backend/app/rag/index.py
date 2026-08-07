@@ -3,41 +3,37 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 import chromadb
-from chromadb.config import Settings
+from chromadb.config import Settings as ChromaSettings
+
+from app.core.config import settings
 
 
 class VectorIndex:
     """
     Local ChromaDB vector index.
 
-    Features:
-    - Persistent storage
-    - Duplicate detection
-    - Incremental indexing
-    - Semantic search
-    - Document deletion
-    - Collection reset
+    Configuration is loaded from app.core.config.
     """
 
     def __init__(
         self,
-        db_path: str = "./chroma_db",
-        collection_name: str = "sentinelforge",
+        db_path: str | None = None,
+        collection_name: str | None = None,
     ):
-        self.db_path = db_path
-        self.collection_name = collection_name
+        self.db_path = db_path or settings.chroma_db_path
+        self.collection_name = (
+            collection_name or settings.chroma_collection_name
+        )
 
         self.client = chromadb.PersistentClient(
-            path=db_path,
-            settings=Settings(
+            path=self.db_path,
+            settings=ChromaSettings(
                 anonymized_telemetry=False
             ),
         )
 
-        self.collection = (
-            self.client.get_or_create_collection(
-                name=collection_name
-            )
+        self.collection = self.client.get_or_create_collection(
+            name=self.collection_name
         )
 
     def _clean_metadata(
@@ -45,17 +41,10 @@ class VectorIndex:
         metadata: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        ChromaDB metadata values must be primitive types.
+        ChromaDB metadata supports primitive values.
 
-        Supported:
-        - str
-        - int
-        - float
-        - bool
-
+        Unsupported values are converted to strings.
         None values are skipped.
-        Lists, tuples and dictionaries are converted
-        to strings.
         """
 
         clean: Dict[str, Any] = {}
@@ -71,10 +60,7 @@ class VectorIndex:
             ):
                 clean[key] = value
 
-            elif isinstance(
-                value,
-                (list, tuple),
-            ):
+            elif isinstance(value, (list, tuple)):
                 clean[key] = ", ".join(
                     map(str, value)
                 )
@@ -92,9 +78,9 @@ class VectorIndex:
         embedded_chunks: List[Dict[str, Any]],
     ) -> None:
         """
-        Add embedded chunks into ChromaDB.
+        Add embedded chunks to ChromaDB.
 
-        Duplicate chunk IDs are skipped.
+        Existing chunk IDs are skipped.
         """
 
         for chunk in embedded_chunks:
@@ -118,9 +104,7 @@ class VectorIndex:
                 chunk["metadata"]
             )
 
-            chunk_id = metadata.get(
-                "chunk_id"
-            )
+            chunk_id = metadata.get("chunk_id")
 
             if not chunk_id:
                 raise ValueError(
@@ -134,8 +118,7 @@ class VectorIndex:
 
             if existing.get("ids"):
                 print(
-                    f"Skipping duplicate chunk: "
-                    f"{chunk_id}"
+                    f"Skipping duplicate chunk: {chunk_id}"
                 )
                 continue
 
@@ -149,24 +132,26 @@ class VectorIndex:
     def search(
         self,
         query_embedding: List[float],
-        top_k: int = 5,
+        top_k: int | None = None,
     ) -> Dict[str, Any]:
         """
-        Perform semantic similarity search.
-
-        Returns the raw ChromaDB result.
-        The Retriever is responsible for formatting it.
+        Perform semantic search.
         """
 
-        if top_k <= 0:
-            return {
-                "ids": [[]],
-                "documents": [[]],
-                "metadatas": [[]],
-                "distances": [[]],
-            }
+        if top_k is None:
+            top_k = settings.default_top_k
 
-        # Avoid requesting more results than exist.
+        if top_k < 1:
+            raise ValueError(
+                "top_k must be greater than zero."
+            )
+
+        if top_k > settings.max_top_k:
+            raise ValueError(
+                f"top_k cannot exceed "
+                f"{settings.max_top_k}."
+            )
+
         total = self.collection.count()
 
         if total == 0:
@@ -177,19 +162,11 @@ class VectorIndex:
                 "distances": [[]],
             }
 
-        n_results = min(
-            top_k,
-            total,
-        )
+        top_k = min(top_k, total)
 
         return self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=n_results,
-            include=[
-                "documents",
-                "metadatas",
-                "distances",
-            ],
+            n_results=top_k,
         )
 
     def delete_document(
@@ -197,20 +174,13 @@ class VectorIndex:
         filename: str,
     ) -> None:
         """
-        Delete every chunk belonging to a file.
+        Delete all chunks belonging to a filename.
         """
 
         results = self.collection.get()
 
-        ids = results.get(
-            "ids",
-            [],
-        )
-
-        metadatas = results.get(
-            "metadatas",
-            [],
-        )
+        ids = results.get("ids", [])
+        metadatas = results.get("metadatas", [])
 
         ids_to_delete: List[str] = []
 
@@ -218,15 +188,12 @@ class VectorIndex:
             ids,
             metadatas,
         ):
+
             if not metadata:
                 continue
 
-            if metadata.get(
-                "filename"
-            ) == filename:
-                ids_to_delete.append(
-                    chunk_id
-                )
+            if metadata.get("filename") == filename:
+                ids_to_delete.append(chunk_id)
 
         if ids_to_delete:
             self.collection.delete(
@@ -234,35 +201,29 @@ class VectorIndex:
             )
 
             print(
-                f"Deleted "
-                f"{len(ids_to_delete)} "
-                f"chunks."
+                f"Deleted {len(ids_to_delete)} chunks "
+                f"for '{filename}'."
             )
-
         else:
             print(
-                "No matching document found."
+                f"No chunks found for '{filename}'."
             )
 
     def total_chunks(self) -> int:
         """
-        Return total number of indexed chunks.
+        Return the number of indexed chunks.
         """
 
         return self.collection.count()
 
     def reset(self) -> None:
         """
-        Delete the current collection and
-        recreate it.
+        Delete and recreate the configured collection.
         """
 
-        try:
-            self.client.delete_collection(
-                name=self.collection_name
-            )
-        except Exception:
-            pass
+        self.client.delete_collection(
+            name=self.collection_name
+        )
 
         self.collection = (
             self.client.get_or_create_collection(
